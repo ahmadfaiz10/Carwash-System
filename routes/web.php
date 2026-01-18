@@ -82,7 +82,6 @@ Route::prefix('admin')
     Route::get('/staff/create', [StaffController::class, 'create'])->name('staff.create');
     Route::post('/staff/store', [StaffController::class, 'store'])->name('staff.store');
     Route::get('/staff/{id}', function($id){return \App\Models\User::findOrFail($id);});
-    Route::post('/staff/update/{id}', [StaffController::class, 'update'])->name('staff.update');
     Route::delete('/staff/delete/{id}', [StaffController::class, 'delete'])->name('staff.delete');
     Route::get('/staff/{id}/edit', [StaffController::class, 'edit'])->name('staff.edit');
     Route::post('/staff/{id}/update', [StaffController::class, 'update'])->name('staff.update');
