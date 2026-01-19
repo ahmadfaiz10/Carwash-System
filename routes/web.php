@@ -320,10 +320,3 @@ Route::get('/test-db', function () {
 Route::fallback(function () {
     return "<h2 style='text-align:center; color:red;'>⚠️ PAGE NOT FOUND (404)</h2>";
 });
-
-Route::get('/debug-mail', function () {
-    \Mail::raw('Test email from Railway', function ($m) {
-        $m->to('aahmadfaiz10@gmail.com')->subject('Railway Mail Test');
-    });
-    return 'Mail sent';
-});

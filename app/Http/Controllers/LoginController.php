@@ -43,11 +43,12 @@ class LoginController extends Controller
             }
 
             
-            if (!$user->email_verified_at) {
-    return back()->withErrors([
-        'error' => 'Please verify your email before logging in.'
-    ]);
-}
+        // if (!$user->email_verified_at) {
+//     return back()->withErrors([
+//         'error' => 'Please verify your email before logging in.'
+//     ]);
+// }
+
 // Login user
             Auth::login($user);
 
