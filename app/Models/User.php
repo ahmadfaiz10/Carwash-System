@@ -17,20 +17,18 @@ class User extends Authenticatable
         'UserName',
         'UserPassword',
         'UserRole',
+        'Status',
         'email_verification_token',
         'email_verified_at',
+        'password_reset_token',
+        'password_reset_expires',
     ];
 
     protected $hidden = ['UserPassword'];
 
+    // 🔐 Tell Laravel which column is the password
     public function getAuthPassword()
     {
         return $this->UserPassword;
     }
-
-    public function isEmailVerified()
-    {
-        return $this->email_verified_at !== null;
-    }
 }
-

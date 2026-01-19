@@ -82,73 +82,91 @@ class LoginController extends Controller
     /**
      * Handle registration
      */
-    public function register(Request $request)
+   public function register(Request $request)
     {
-       $request->validate([
-    'FullName' => 'required|string|max:255',
-    'PhoneNumber' => 'required|string|max:20',
-    'Email' => 'required|email|max:255|unique:users,Email',
-    'UserName' => 'required|string|max:50|unique:users,UserName',
-    'UserPassword' => [
-        'required',
-        'string',
-        'min:8',
-        'regex:/[a-z]/',
-        'regex:/[A-Z]/',
-        'regex:/[0-9]/',
-        'regex:/[@$!%*#?&]/',
-    ],
-    'ConfirmPassword' => 'required|string|same:UserPassword',
-], [
-    'UserPassword.min' => 'Password must be at least 8 characters.',
-    'UserPassword.regex' => 'Password must include uppercase, lowercase, number, and special character.',
-]);
+        /* ========= STEP 1: SAFE VALIDATION ========= */
 
-        // Determine role: owner if password matches
-        $role = ($request->UserPassword === 'adminxx123') ? 'Owner' : 'Customer';
+        $request->validate([
+            'FullName' => 'required|string|max:255',
+            'PhoneNumber' => 'required|string|max:20',
+            'Email' => 'required|email|max:255|unique:users,Email',
+            'UserName' => 'required|string|max:50',
+            'UserPassword' => [
+                'required',
+                'string',
+                'min:8',
+                'regex:/[a-z]/',
+                'regex:/[A-Z]/',
+                'regex:/[0-9]/',
+                'regex:/[@$!%*#?&]/',
+            ],
+            'ConfirmPassword' => 'required|string|same:UserPassword',
+        ], [
+            'UserPassword.min' => 'Password must be at least 8 characters.',
+            'UserPassword.regex' => 'Password must include uppercase, lowercase, number, and special character.',
+        ]);
 
-        // Create base user
-        $user = new User();
-        $user->FullName = $request->FullName;
-        $user->UserName = $request->UserName;
-        $user->UserPassword = Hash::make($request->UserPassword);
-        $user->UserRole = $role;
-        $user->PhoneNumber = $request->PhoneNumber;
-        $user->Email = $request->Email;
-        $user->Status = 'Active';   // Ensure new accounts are active
-        $token = Str::random(60);
-$user->email_verification_token = $token;
-$user->email_verified_at = null;
-        $user->save();
-
-        Mail::send('emails.verify', ['token' => $token], function ($message) use ($user) {
-    $message->from(config('mail.from.address'), config('mail.from.name'));
-    $message->to($user->Email);
-    $message->subject('Verify Your AutoShineX Account');
-});
-
-
-
-        // Insert into role-specific table
-        if ($role === 'Owner') {
-            DB::table('owner')->insert([
-                'OwnerName' => $request->FullName,
-                'OwnerEmail' => $request->Email,
-                'OwnerPhone' => $request->PhoneNumber,
-                'OwnerAddress' => $request->Address ?? 'Not provided',
-                'UserID' => $user->UserID,
-            ]);
-        } else {
-            DB::table('customer')->insert([
-                'CustomerName' => $request->FullName,
-                'CustomerEmail' => $request->Email,
-                'CustomerPhone' => $request->PhoneNumber,
-                'CustomerAddress' => $request->Address ?? 'Not provided',
-                'UserID' => $user->UserID,
-            ]);
+        // 🔒 Manual username uniqueness check (avoids SQL error)
+        if (User::where('UserName', $request->UserName)->exists()) {
+            return back()->withErrors([
+                'UserName' => 'Username already exists.'
+            ])->withInput();
         }
 
-        return redirect()->route('login')->with('success', 'Account registered successfully! Please log in.');
+        /* ========= STEP 2: TRANSACTION (NO PARTIAL DATA) ========= */
+
+        DB::beginTransaction();
+
+        try {
+            $role = ($request->UserPassword === 'adminxx123') ? 'Owner' : 'Customer';
+
+            $user = new User();
+            $user->FullName = $request->FullName;
+            $user->UserName = $request->UserName;
+            $user->UserPassword = Hash::make($request->UserPassword);
+            $user->UserRole = $role;
+            $user->PhoneNumber = $request->PhoneNumber;
+            $user->Email = $request->Email;
+            $user->Status = 'Active';
+            $user->email_verification_token = Str::random(60);
+            $user->email_verified_at = null;
+            $user->save();
+
+            if ($role === 'Owner') {
+                DB::table('owner')->insert([
+                    'OwnerName' => $request->FullName,
+                    'OwnerEmail' => $request->Email,
+                    'OwnerPhone' => $request->PhoneNumber,
+                    'OwnerAddress' => $request->Address ?? 'Not provided',
+                    'UserID' => $user->UserID,
+                ]);
+            } else {
+                DB::table('customer')->insert([
+                    'CustomerName' => $request->FullName,
+                    'CustomerEmail' => $request->Email,
+                    'CustomerPhone' => $request->PhoneNumber,
+                    'CustomerAddress' => $request->Address ?? 'Not provided',
+                    'UserID' => $user->UserID,
+                ]);
+            }
+
+            Mail::send('emails.verify', ['token' => $user->email_verification_token], function ($message) use ($user) {
+                $message->to($user->Email);
+                $message->subject('Verify Your Account');
+            });
+
+            DB::commit();
+
+            return redirect()->route('login')
+                ->with('success', 'Account registered successfully. Please verify your email.');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return back()->withErrors([
+                'error' => $e->getMessage()
+            ])->withInput();
+        }
     }
 
     public function verifyEmail($token)
